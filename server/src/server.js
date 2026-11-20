@@ -112,11 +112,22 @@ function resetMatch(room) {
   for (let i = 0; i < 8; i++) spawnOrb(room);
 }
 
+// Matchmaker deployments: start when every matched player is in (a solo match too, after the
+// matchmaker's expansion), or START_WAIT_MS after the second player if someone never shows up.
+// Otherwise (direct deploy, self-hosted): start at 2 players, as Manus wrote it.
+const START_WAIT_MS = 15000;
+function startMatch(room) {
+  if (room.phase !== 'lobby') return;
+  clearTimeout(room.startTimer);
+  resetMatch(room);
+  broadcast(room, { type: 'match_start', endsAt: room.endsAt, matchMs: MATCH_MS });
+}
 function maybeStart(room) {
-  if (room.phase === 'lobby' && room.players.size >= 2) {
-    resetMatch(room);
-    broadcast(room, { type: 'match_start', endsAt: room.endsAt, matchMs: MATCH_MS });
-  }
+  if (room.phase !== 'lobby') return;
+  const expected = edgegap.expectedPlayers;
+  if (!expected) { if (room.players.size >= 2) startMatch(room); return; }
+  if (room.players.size >= expected) return startMatch(room);
+  if (room.players.size >= 2 && !room.startTimer) room.startTimer = setTimeout(() => startMatch(room), START_WAIT_MS);
 }
 
 function finishMatch(room) {
@@ -255,6 +266,8 @@ function handleMessage(ws, raw) {
     if (!room) { if (rooms.size >= MAX_ROOMS) return send(ws, { type: 'error', code: 'ROOM_LIMIT' }); room = makeRoom(code); rooms.set(code, room); }
     room.lastActiveAt = Date.now();
     if (message.resumeToken && reconnectPlayer(room, ws, message.resumeToken)) return;
+    // On a matchmaker deployment only the matched tickets get a seat.
+    if (!edgegap.ticketAllowed(message.ticket)) return send(ws, { type: 'error', code: 'NOT_MATCHED', message: 'This server is for another match. Find a new match.' });
     if (room.players.size >= 4) return send(ws, { type: 'error', code: 'ROOM_FULL' });
     createPlayer(room, ws, message.name, null);
     return;

@@ -1,3 +1,5 @@
+import baseConfig from './config.js';
+
 const params = new URLSearchParams(location.search);
 const defaultServer = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname || 'localhost'}:8787/ws`;
 const serverUrl = params.get('server') || defaultServer;
@@ -5,7 +7,7 @@ const $ = id => document.getElementById(id);
 const canvas = $('arena');
 const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
-const state = { ws: null, room: '', name: '', playerId: '', resumeToken: '', phase: 'lobby', players: [], orbs: [], winner: null, remainingMs: 0, endsAt: 0, lastSnapshotAt: 0, keys: new Set(), lastInputSent: 0, toastUntil: 0 };
+const state = { ws: null, url: '', ticket: '', room: '', name: '', playerId: '', resumeToken: '', phase: 'lobby', players: [], orbs: [], winner: null, remainingMs: 0, endsAt: 0, lastSnapshotAt: 0, keys: new Set(), lastInputSent: 0, toastUntil: 0 };
 
 $('server-copy').textContent = `SERVER TARGET  ${serverUrl}  ·  change with ?server=ws://host:port/ws`;
 
@@ -19,16 +21,68 @@ function normalizedRoom(value) { return String(value || '').trim().toUpperCase()
 
 $('join-form').addEventListener('submit', event => { event.preventDefault(); clearError(); state.room = normalizedRoom($('room-input').value); state.name = $('name-input').value.trim().slice(0, 18) || 'PLAYER'; if (state.room.length < 4) return showError('Use a room code with 4–8 letters or numbers.'); connect(); });
 
-function connect() {
+// attempts > 1 retries a connection that never opened: a server the matchmaker just started can
+// refuse connections (or answer 502 through the TLS proxy) for a few seconds.
+function connect(url = serverUrl, attempts = 1) {
   if (state.ws) state.ws.close();
+  state.url = url;
   setStatus('busy', 'CONNECTING');
   let ws;
-  try { ws = new WebSocket(serverUrl); } catch { return showError('That server address is not a valid WebSocket URL.'); }
+  try { ws = new WebSocket(url); } catch { return showError('That server address is not a valid WebSocket URL.'); }
   state.ws = ws;
-  ws.addEventListener('open', () => { setStatus('online', 'CONNECTED'); send({ type: 'join', room: state.room, name: state.name, resumeToken: state.resumeToken || undefined }); });
+  let opened = false;
+  ws.addEventListener('open', () => { opened = true; setStatus('online', 'CONNECTED'); send({ type: 'join', room: state.room, name: state.name, ticket: state.ticket || undefined, resumeToken: state.resumeToken || undefined }); });
   ws.addEventListener('message', event => { try { handleMessage(JSON.parse(event.data)); } catch { showError('Received an invalid message from the server.'); } });
-  ws.addEventListener('error', () => { setStatus('offline', 'ERROR'); showError(`Could not connect to ${serverUrl}. Check that the server is running and reachable.`); });
-  ws.addEventListener('close', () => { setStatus('offline', 'OFFLINE'); if (!$('game').hidden) showToast('CONNECTION LOST — REFRESH TO RETRY', 100000); });
+  ws.addEventListener('error', () => { if (!opened && attempts > 1) return; setStatus('offline', 'ERROR'); showError(`Could not connect to ${url}. Check that the server is running and reachable.`); });
+  ws.addEventListener('close', () => {
+    if (!opened && attempts > 1 && state.ws === ws) { $('mm-status').textContent = `Server starting, connecting (${attempts - 1} tries left)...`; return setTimeout(() => connect(url, attempts - 1), 1000); }
+    setStatus('offline', 'OFFLINE'); if (!$('game').hidden) showToast('CONNECTION LOST — REFRESH TO RETRY', 100000);
+  });
+}
+
+// ---- Optional Edgegap matchmaker (config.js or ?mm=&token=) ----------------------------------
+// Each player queues as a group of one through @edgegap/sdk. When a match is found the matchmaker
+// starts one Edgegap server near the players; the page connects to it with its ticket ID, which
+// the server checks against MM_TICKET_IDS. The page's origin must be in the matchmaker config's
+// allowed_cors_origins, or the browser blocks the request (CORS error, no HTTP status).
+const config = { ...baseConfig };
+try { Object.assign(config, (await import('./config.local.js')).default); } catch {}
+if (params.get('mm')) config.matchmakerUrl = params.get('mm');
+if (params.get('token')) config.matchmakerToken = params.get('token');
+const MM_STATUS = { SEARCHING: 'Searching for players...', TEAM_FOUND: 'Match found! Starting a server near you...', MATCH_FOUND: 'Match found! Starting a server near you...', HOST_ASSIGNED: 'Server ready, connecting...' };
+let mm = null;
+
+if (config.matchmakerUrl && config.matchmakerToken) {
+  $('matchmaking').hidden = false;
+  $('find-button').addEventListener('click', findMatch);
+  $('cancel-button').addEventListener('click', () => { mm?.stopMatchmaking(); mm = null; $('cancel-button').hidden = true; $('find-button').disabled = false; $('mm-status').textContent = 'Cancelled.'; });
+  addEventListener('pagehide', () => mm?.stopMatchmaking());
+}
+
+async function findMatch() {
+  clearError();
+  $('find-button').disabled = true; $('cancel-button').hidden = false;
+  $('mm-status').textContent = 'Joining queue...';
+  try {
+    const { matchmaking, getConnectionUrl } = await import('@edgegap/sdk');
+    mm?.dispose();
+    mm = new matchmaking.GroupAgent({ baseUrl: config.matchmakerUrl, authToken: config.matchmakerToken, logGroupUpdates: false });
+    mm.initialize(undefined, ({ current }) => { if (MM_STATUS[current?.status]) $('mm-status').textContent = MM_STATUS[current.status]; });
+    mm.createGroup({ profile: 'arena', attributes: {}, is_ready: true }, true);
+    const assignment = await mm.nextAssignment();
+    state.ticket = mm.group.current.ticket_id;
+    mm.dispose(); mm = null; // matched: leaving the group now would only get a 409
+    // One server per match, so the room code doesn't matter there. TLS Upgrade is on for the
+    // port: connect by fqdn (the certificate matches it) and add the server's /ws path.
+    state.room = 'MATCH';
+    state.name = $('name-input').value.trim().slice(0, 18) || 'PLAYER';
+    connect(`${getConnectionUrl(assignment, 'gameport')}/ws`, 10);
+  } catch (err) {
+    $('mm-status').textContent = '';
+    showError(`Matchmaking failed: ${err?.message ?? err}`);
+  } finally {
+    $('find-button').disabled = false; $('cancel-button').hidden = true;
+  }
 }
 
 function handleMessage(message) {
@@ -73,6 +127,9 @@ function renderScoreboard() { $('scoreboard').innerHTML = state.players.slice().
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function updateHud() { const remaining = state.phase === 'match' ? Math.max(0, state.endsAt - Date.now()) : 0; const sec = Math.ceil(remaining / 1000); $('timer').textContent = `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`; $('phase-label').textContent = state.phase === 'match' ? 'PUSH THE ORBS' : state.phase === 'results' ? 'MATCH COMPLETE · PRESS R TO REMATCH' : 'WAITING FOR RIVALS'; renderScoreboard(); }
 function frame(now) { sendInput(now); drawArena(now); updateHud(); hideToastIfReady(now); requestAnimationFrame(frame); }
+// Close the socket cleanly when the page goes away, so the server sees the player leave at once
+// (otherwise only its 30 s ping notices, and an empty Edgegap server runs that much longer).
+addEventListener('pagehide', () => state.ws?.close(1001, 'page closed'));
 const savedRoom = normalizedRoom(params.get('room')); if (savedRoom) $('room-input').value = savedRoom;
 state.resumeToken = sessionStorage.getItem(`orb-arena:${$('room-input').value}`) || '';
 requestAnimationFrame(frame);

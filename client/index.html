@@ -6,6 +6,14 @@
   <title>Orb Arena</title>
   <meta name="description" content="Orb Arena — neon hover-drone multiplayer arena">
   <link rel="stylesheet" href="./styles.css">
+  <!-- Edgegap JS SDK for the optional Find Match, from a CDN through an import map (no bundler).
+       It is only downloaded when a matchmaker is configured (config.js or ?mm=&token=). -->
+  <script type="importmap">
+    {
+      "imports": { "@edgegap/sdk": "https://cdn.jsdelivr.net/npm/@edgegap/sdk@1.1.0/dist/browser/edgegap.js" },
+      "integrity": { "https://cdn.jsdelivr.net/npm/@edgegap/sdk@1.1.0/dist/browser/edgegap.js": "sha384-U8KQMl3e8xF4aAIJJMXV8IdkCKWiHSQhHISsedbG4z/L99dNOq5FoRlMgPDYgNUF" }
+    }
+  </script>
 </head>
 <body>
   <main class="app-shell">
@@ -18,6 +26,12 @@
       <div class="eyebrow">NEON DRONE SPORT / 03:00 MATCH</div>
       <h1>Push the light.<br><em>Own the arena.</em></h1>
       <p class="lede">Drive glowing orbs into your color goal. Dash through rivals to stun them. Highest score wins.</p>
+      <div id="matchmaking" class="matchmaking" hidden>
+        <button id="find-button" type="button" class="primary-button">FIND MATCH <span>↗</span></button>
+        <button id="cancel-button" type="button" class="ghost-button" hidden>CANCEL</button>
+        <div id="mm-status" class="server-copy"></div>
+        <div class="divider">OR PLAY WITH A ROOM CODE</div>
+      </div>
       <form id="join-form" class="join-form">
         <label>ROOM CODE<input id="room-input" name="room" value="NOVA7" minlength="4" maxlength="8" pattern="[A-Za-z0-9]{4,8}" required autocomplete="off"></label>
         <label>CALLSIGN<input id="name-input" name="name" value="PLAYER" maxlength="18" required autocomplete="off"></label>
