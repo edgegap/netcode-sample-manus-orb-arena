@@ -4,6 +4,7 @@
 const http = require('node:http');
 const crypto = require('node:crypto');
 const { WebSocketServer } = require('ws');
+const edgegap = require('./edgegap');
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -91,9 +92,11 @@ function send(ws, payload) {
 function broadcast(room, payload) {
   for (const player of room.players.values()) if (player.ws) send(player.ws, payload);
 }
+function playersOnline() { let n = 0; for (const ws of connections) if (ws.player) n++; return n; }
 function broadcastSnapshot(room) { room.revision += 1; broadcast(room, roomView(room)); }
 
 function resetMatch(room) {
+  edgegap.matchStarted();
   room.phase = 'match';
   room.startedAt = Date.now();
   room.endsAt = room.startedAt + MATCH_MS;
@@ -117,6 +120,7 @@ function maybeStart(room) {
 }
 
 function finishMatch(room) {
+  edgegap.matchEnded();
   room.phase = 'results';
   const standings = [...room.players.values()].sort((a, b) => b.score - a.score);
   room.winner = standings[0] ? { id: standings[0].id, name: standings[0].name, score: standings[0].score } : null;
@@ -142,6 +146,7 @@ function createPlayer(room, ws, name, resumeToken) {
   ws.player = player;
   ws.room = room;
   send(ws, { type: 'joined', build: BUILD, room: room.code, playerId: player.id, resumeToken: player.resumeToken, seat: player.seat, arena: ARENA, matchMs: MATCH_MS });
+  edgegap.connectedChanged(playersOnline());
   broadcastSnapshot(room);
   maybeStart(room);
   return player;
@@ -153,6 +158,7 @@ function reconnectPlayer(room, ws, token) {
   if (player.ws && player.ws !== ws) player.ws.close(4002, 'replaced');
   player.ws = ws; ws.player = player; ws.room = room;
   send(ws, { type: 'joined', build: BUILD, room: room.code, playerId: player.id, resumeToken: player.resumeToken, seat: player.seat, arena: ARENA, matchMs: MATCH_MS, resumed: true });
+  edgegap.connectedChanged(playersOnline());
   broadcastSnapshot(room);
   return player;
 }
@@ -279,19 +285,23 @@ wss.on('connection', ws => {
   connections.add(ws); ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('message', data => handleMessage(ws, data.toString()));
-  ws.on('close', () => { connections.delete(ws); if (ws.player) { ws.player.ws = null; if (ws.room) broadcastSnapshot(ws.room); } });
+  ws.on('close', () => { connections.delete(ws); if (ws.player) { if (ws.player.ws === ws) ws.player.ws = null; if (ws.room) broadcastSnapshot(ws.room); edgegap.connectedChanged(playersOnline()); } });
   ws.on('error', () => {});
   send(ws, { type: 'hello', build: BUILD, protocol: 1 });
 });
 
+let tickCount = 0;
 setInterval(() => {
   const dt = 1 / TICK_RATE;
+  tickCount += 1;
   for (const room of rooms.values()) {
     simulate(room, dt);
-    if (room.phase === 'match' && room.revision % 2 === 0) broadcastSnapshot(room);
+    // Fix: was `room.revision % 2 === 0`, but broadcastSnapshot() bumps revision, so snapshots
+    // stopped after the first one. Send every (TICK_RATE / SNAPSHOT_RATE)th tick instead.
+    if (room.phase === 'match' && tickCount % Math.round(TICK_RATE / SNAPSHOT_RATE) === 0) broadcastSnapshot(room);
     if (room.players.size === 0 && Date.now() - room.lastActiveAt > ROOM_TTL_MS) rooms.delete(room.code);
   }
 }, 1000 / TICK_RATE);
 setInterval(() => { for (const ws of connections) { if (!ws.isAlive) ws.terminate(); ws.isAlive = false; ws.ping(); } }, 30000);
 
-httpServer.listen(PORT, HOST, () => console.log(`Orb Arena server ${BUILD} listening on http://${HOST}:${PORT} (ws path /ws)`));
+httpServer.listen(PORT, HOST, () => { console.log(`Orb Arena server ${BUILD} listening on http://${HOST}:${PORT} (ws path /ws)`); edgegap.started(); });
