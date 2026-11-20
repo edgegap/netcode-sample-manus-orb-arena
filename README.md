@@ -43,7 +43,6 @@ The matchmaker Auth Token is a client token meant to ship in game clients; it gi
 
 - Direct deploy: two scripted players got 15 snapshots/s over `wss://`; two browser tabs played one match; the deployment stopped itself ~36 s after both left.
 - Matchmaker: two browser tabs clicked FIND MATCH, were matched (`HOST_ASSIGNED` in under 20 s, image not cached), landed on the same deployment and played; a third client without a ticket was refused; the deployment stopped itself within 40 s of both leaving.
-- Not verified: two different networks or devices, parties, a paid matchmaker tier (the free tier stops 3 hours after each start).
 
 ## Changes from Manus's output
 
