@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orb Arena</title>
+  <meta name="description" content="Orb Arena — neon hover-drone multiplayer arena">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">◈</span><span>ORB ARENA</span></div>
+      <div id="connection-status" class="status-pill offline"><span class="status-dot"></span><span id="status-label">OFFLINE</span></div>
+    </header>
+
+    <section id="lobby" class="panel lobby-panel">
+      <div class="eyebrow">NEON DRONE SPORT / 03:00 MATCH</div>
+      <h1>Push the light.<br><em>Own the arena.</em></h1>
+      <p class="lede">Drive glowing orbs into your color goal. Dash through rivals to stun them. Highest score wins.</p>
+      <form id="join-form" class="join-form">
+        <label>ROOM CODE<input id="room-input" name="room" value="NOVA7" minlength="4" maxlength="8" pattern="[A-Za-z0-9]{4,8}" required autocomplete="off"></label>
+        <label>CALLSIGN<input id="name-input" name="name" value="PLAYER" maxlength="18" required autocomplete="off"></label>
+        <button type="submit" class="primary-button">ENTER ARENA <span>↗</span></button>
+      </form>
+      <div id="server-copy" class="server-copy"></div>
+      <div id="error-box" class="error-box" hidden></div>
+      <div class="controls-note"><span>WASD / ARROWS</span> move <span>SPACE</span> dash-stun <span>R</span> restart</div>
+    </section>
+
+    <section id="game" class="game-panel" hidden>
+      <div class="game-head">
+        <div><div class="eyebrow">ROOM <span id="room-label">—</span></div><div id="phase-label" class="phase-label">WAITING FOR RIVALS</div></div>
+        <div id="timer" class="timer">03:00</div>
+      </div>
+      <div class="arena-wrap"><canvas id="arena" width="1600" height="900" aria-label="Orb Arena game board"></canvas><div id="toast" class="toast" hidden></div></div>
+      <div id="scoreboard" class="scoreboard"></div>
+      <div class="mobile-controls" aria-hidden="true"><button data-key="ArrowUp">▲</button><div><button data-key="ArrowLeft">◀</button><button data-key="Space" class="dash-button">DASH</button><button data-key="ArrowRight">▶</button></div><button data-key="ArrowDown">▼</button></div>
+    </section>
+  </main>
+  <script type="module" src="./client.js"></script>
+</body>
+</html>
