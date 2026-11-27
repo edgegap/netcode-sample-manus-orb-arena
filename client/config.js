@@ -8,4 +8,5 @@
 export default {
   matchmakerUrl: "",
   matchmakerToken: "",
+  matchmakerProfile: "arena", // profile name in your matchmaker config (also ?profile=)
 };

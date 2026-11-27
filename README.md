@@ -29,7 +29,7 @@ cd client && python -m http.server 8091        # open http://localhost:8091/ in 
    ```
 2. Create an application and a version with that image: port **8787**, name `gameport`, protocol **WS**, **TLS Upgrade on**, 256 CPU units / 512 MB, restart policy `never`, max duration 15-30 min.
 3. **Without a matchmaker:** deploy one server from the dashboard (or the Edgegap MCP), then open the client with `?server=wss://<fqdn>:<external port>/ws&room=ARENA1` in two tabs.
-4. **With the matchmaker (optional):** set `application.name`/`version` in `matchmaker/arena.json`, add your page's origin to `allowed_cors_origins`, then Edgegap dashboard → Matchmakers → Create → upload it → Create And Start. Put its **API URL** and **Auth Token** in `client/config.js` (or `client/config.local.js`, git-ignored, or `?mm=<url>&token=<token>`). The lobby now shows FIND MATCH.
+4. **With the matchmaker (optional):** set `application.name`/`version` in `matchmaker/arena.json`, add your page's origin to `allowed_cors_origins`, then Edgegap dashboard → Matchmakers → Create → upload it → Create And Start. Put its **API URL** and **Auth Token** in `client/config.js` (or `client/config.local.js`, git-ignored, or `?mm=<url>&token=<token>`). The lobby now shows FIND MATCH. If your matchmaker profile isn't called `arena`, set `matchmakerProfile` in the same file (or `?profile=<name>`).
 
 The matchmaker Auth Token is a client token meant to ship in game clients; it gives no access to your Edgegap account. Never put your Edgegap API token in the client.
 
