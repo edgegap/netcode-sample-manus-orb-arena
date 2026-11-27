@@ -49,6 +49,7 @@ const config = { ...baseConfig };
 try { Object.assign(config, (await import('./config.local.js')).default); } catch {}
 if (params.get('mm')) config.matchmakerUrl = params.get('mm');
 if (params.get('token')) config.matchmakerToken = params.get('token');
+if (params.get('profile')) config.matchmakerProfile = params.get('profile');
 const MM_STATUS = { SEARCHING: 'Searching for players...', TEAM_FOUND: 'Match found! Starting a server near you...', MATCH_FOUND: 'Match found! Starting a server near you...', HOST_ASSIGNED: 'Server ready, connecting...' };
 let mm = null;
 
@@ -68,7 +69,7 @@ async function findMatch() {
     mm?.dispose();
     mm = new matchmaking.GroupAgent({ baseUrl: config.matchmakerUrl, authToken: config.matchmakerToken, logGroupUpdates: false });
     mm.initialize(undefined, ({ current }) => { if (MM_STATUS[current?.status]) $('mm-status').textContent = MM_STATUS[current.status]; });
-    mm.createGroup({ profile: 'arena', attributes: {}, is_ready: true }, true);
+    mm.createGroup({ profile: config.matchmakerProfile || 'arena', attributes: {}, is_ready: true }, true);
     const assignment = await mm.nextAssignment();
     state.ticket = mm.group.current.ticket_id;
     mm.dispose(); mm = null; // matched: leaving the group now would only get a 409

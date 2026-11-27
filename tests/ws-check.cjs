@@ -7,7 +7,7 @@
 //   node ws-check.cjs wss://abc123.pr.edgegap.net:31160/ws '{"type":"join","room":"TEST1","name":"BOT"}'
 //
 // Expect the snapshot/state type at roughly the server's send rate × seconds for every client.
-const WebSocket = require(require.resolve('ws', { paths: [process.cwd(), __dirname] }));
+const WebSocket = require(require.resolve('ws', { paths: [process.cwd(), __dirname, __dirname + '/../server'] }));
 const [url, joinJson, n = '2', secs = '5'] = process.argv.slice(2);
 if (!url || !joinJson) { console.error('usage: node ws-check.cjs <url> <join JSON> [clients] [seconds]'); process.exit(2); }
 const counts = [];
